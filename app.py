@@ -51,8 +51,14 @@ class ChromeTabCreatorApp(ctk.CTk):
         self.main_frame.pack(fill="both", expand=True, padx=25, pady=(0, 15))
 
         # 1. Shortcut Name
-        self.name_label = ctk.CTkLabel(self.main_frame, text="1. Název zástupce na ploše:", font=ctk.CTkFont(size=14, weight="bold"))
-        self.name_label.pack(anchor="w", padx=20, pady=(15, 5))
+        self.name_header_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.name_header_frame.pack(fill="x", padx=20, pady=(15, 5))
+        
+        self.name_label = ctk.CTkLabel(self.name_header_frame, text="1. Název zástupce na ploše:", font=ctk.CTkFont(size=14, weight="bold"))
+        self.name_label.pack(side="left")
+        
+        self.load_btn = ctk.CTkButton(self.name_header_frame, text="📁 Načíst existující...", width=130, height=26, font=ctk.CTkFont(size=12), command=self.load_shortcut)
+        self.load_btn.pack(side="right")
 
         self.name_entry = ctk.CTkEntry(self.main_frame, placeholder_text="např. Ranní Přehled, AI Nástroje, Práce...", height=38, font=ctk.CTkFont(size=13))
         self.name_entry.pack(fill="x", padx=20, pady=(0, 12))
@@ -261,26 +267,6 @@ class ChromeTabCreatorApp(ctk.CTk):
             return
         
         mouse_y = event.y_root
-        target_row = None
-        for r in self.row_widgets:
-            ry = r.winfo_rooty()
-            rh = r.winfo_height()
-            if ry <= mouse_y <= ry + rh:
-                target_row = r
-                break
-        
-        if self._last_target_row and self._last_target_row != target_row and self._last_target_row != self._drag_start_row:
-            self._last_target_row.configure(fg_color="#1e1e1e")
-            
-        if target_row and target_row != self._drag_start_row:
-            target_row.configure(fg_color="#2c3e50")
-            self._last_target_row = target_row
-
-    def on_drag_release(self, event):
-        if not hasattr(self, '_drag_start_row'):
-            return
-            
-        mouse_y = event.y_root
         target_idx = self._drag_start_idx
         
         for r in self.row_widgets:
@@ -290,17 +276,30 @@ class ChromeTabCreatorApp(ctk.CTk):
                 target_idx = r.url_index
                 break
                 
-        if target_idx == self._drag_start_idx and self.row_widgets:
-            if mouse_y < self.row_widgets[0].winfo_rooty():
-                target_idx = 0
-            elif mouse_y > self.row_widgets[-1].winfo_rooty() + self.row_widgets[-1].winfo_height():
-                target_idx = len(self.urls) - 1
-                
         if target_idx != self._drag_start_idx:
+            # Swap items in data
             item = self.urls.pop(self._drag_start_idx)
             self.urls.insert(target_idx, item)
             
+            # Swap widgets list
+            widget_item = self.row_widgets.pop(self._drag_start_idx)
+            self.row_widgets.insert(target_idx, widget_item)
+            
+            # Update indexes
+            for i, w in enumerate(self.row_widgets):
+                w.url_index = i
+            
+            # Repack layout visually
+            for w in self.row_widgets:
+                w.pack_forget()
+            for w in self.row_widgets:
+                w.pack(fill="x", pady=2, padx=2)
+                
+            self._drag_start_idx = target_idx
+
+    def on_drag_release(self, event):
         if hasattr(self, '_drag_start_row'):
+            self._drag_start_row.configure(fg_color="#1e1e1e")
             del self._drag_start_row
         if hasattr(self, '_drag_start_idx'):
             del self._drag_start_idx
@@ -371,6 +370,51 @@ class ChromeTabCreatorApp(ctk.CTk):
             self.set_status(f"✅ Zástupce '{safe_name}' byl úspěšně vytvořen na Ploše!", "#2ecc71")
         except Exception as e:
             self.set_status(f"Chyba při vytváření: {str(e)}", "#e74c3c")
+
+    def load_shortcut(self):
+        file_path = ctk.filedialog.askopenfilename(
+            initialdir=DESKTOP_PATH, 
+            title="Vyber zástupce", 
+            filetypes=[("Zástupci", "*.lnk")]
+        )
+        if not file_path:
+            return
+            
+        try:
+            shell = win32com.client.Dispatch("WScript.Shell")
+            shortcut = shell.CreateShortcut(file_path)
+            args = shortcut.Arguments
+            
+            import shlex
+            parsed_args = shlex.split(args)
+            
+            urls = []
+            new_window = False
+            dark_mode = False
+            
+            for arg in parsed_args:
+                if arg == "--new-window":
+                    new_window = True
+                elif arg == "--force-dark-mode":
+                    dark_mode = True
+                else:
+                    if arg.startswith("http"):
+                        urls.append(arg)
+                        
+            # Update UI
+            self.name_entry.delete(0, "end")
+            name_without_ext = os.path.splitext(os.path.basename(file_path))[0]
+            self.name_entry.insert(0, name_without_ext)
+            
+            self.new_window_var.set(new_window)
+            self.dark_mode_var.set(dark_mode)
+            
+            self.urls = urls
+            self.refresh_list()
+            self.set_status(f"✅ Zástupce '{name_without_ext}' úspěšně načten.", "#2ecc71")
+            
+        except Exception as e:
+            self.set_status(f"Chyba při načítání: {str(e)}", "#e74c3c")
 
     def set_status(self, text, color):
         self.status_label.configure(text=text, text_color=color)
