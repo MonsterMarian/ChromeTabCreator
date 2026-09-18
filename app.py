@@ -189,12 +189,19 @@ class ChromeTabCreatorApp(ctk.CTk):
             empty_lbl.pack(pady=30)
             return
 
+        self.row_widgets = []
+
         for idx, url in enumerate(self.urls, 1):
             row = ctk.CTkFrame(self.scroll_frame, height=36, fg_color="#1e1e1e", corner_radius=6)
             row.pack(fill="x", pady=2, padx=2)
+            row.url_index = idx - 1
+            self.row_widgets.append(row)
+
+            drag_lbl = ctk.CTkLabel(row, text="≡", width=25, font=ctk.CTkFont(size=18, weight="bold"), text_color="gray50", cursor="hand2")
+            drag_lbl.pack(side="left", padx=(5, 0))
 
             num_lbl = ctk.CTkLabel(row, text=f"{idx}.", width=25, font=ctk.CTkFont(weight="bold"), text_color="gray70")
-            num_lbl.pack(side="left", padx=(10, 5))
+            num_lbl.pack(side="left", padx=(5, 5))
 
             url_lbl = ctk.CTkLabel(row, text=url, anchor="w", font=ctk.CTkFont(size=13))
             url_lbl.pack(side="left", fill="x", expand=True, padx=5)
@@ -234,6 +241,72 @@ class ChromeTabCreatorApp(ctk.CTk):
                 command=lambda i=idx-1: self.move_up(i)
             )
             up_btn.pack(side="right", padx=(2, 2), pady=4)
+
+            # Bind drag events
+            drag_lbl.bind("<ButtonPress-1>", lambda e, r=row: self.on_drag_start(e, r))
+            drag_lbl.bind("<B1-Motion>", self.on_drag_motion)
+            drag_lbl.bind("<ButtonRelease-1>", self.on_drag_release)
+            url_lbl.bind("<ButtonPress-1>", lambda e, r=row: self.on_drag_start(e, r))
+            url_lbl.bind("<B1-Motion>", self.on_drag_motion)
+            url_lbl.bind("<ButtonRelease-1>", self.on_drag_release)
+
+    def on_drag_start(self, event, row):
+        self._drag_start_row = row
+        self._drag_start_idx = row.url_index
+        row.configure(fg_color="#3a3a3a")
+        self._last_target_row = None
+
+    def on_drag_motion(self, event):
+        if not hasattr(self, '_drag_start_row'):
+            return
+        
+        mouse_y = event.y_root
+        target_row = None
+        for r in self.row_widgets:
+            ry = r.winfo_rooty()
+            rh = r.winfo_height()
+            if ry <= mouse_y <= ry + rh:
+                target_row = r
+                break
+        
+        if self._last_target_row and self._last_target_row != target_row and self._last_target_row != self._drag_start_row:
+            self._last_target_row.configure(fg_color="#1e1e1e")
+            
+        if target_row and target_row != self._drag_start_row:
+            target_row.configure(fg_color="#2c3e50")
+            self._last_target_row = target_row
+
+    def on_drag_release(self, event):
+        if not hasattr(self, '_drag_start_row'):
+            return
+            
+        mouse_y = event.y_root
+        target_idx = self._drag_start_idx
+        
+        for r in self.row_widgets:
+            ry = r.winfo_rooty()
+            rh = r.winfo_height()
+            if ry <= mouse_y <= ry + rh:
+                target_idx = r.url_index
+                break
+                
+        if target_idx == self._drag_start_idx and self.row_widgets:
+            if mouse_y < self.row_widgets[0].winfo_rooty():
+                target_idx = 0
+            elif mouse_y > self.row_widgets[-1].winfo_rooty() + self.row_widgets[-1].winfo_height():
+                target_idx = len(self.urls) - 1
+                
+        if target_idx != self._drag_start_idx:
+            item = self.urls.pop(self._drag_start_idx)
+            self.urls.insert(target_idx, item)
+            
+        if hasattr(self, '_drag_start_row'):
+            del self._drag_start_row
+        if hasattr(self, '_drag_start_idx'):
+            del self._drag_start_idx
+        self._last_target_row = None
+        
+        self.refresh_list()
 
     def move_up(self, index):
         if index > 0:
