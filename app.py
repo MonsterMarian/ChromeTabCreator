@@ -209,7 +209,41 @@ class ChromeTabCreatorApp(ctk.CTk):
                 font=ctk.CTkFont(size=12, weight="bold"),
                 command=lambda u=url: self.remove_url(u)
             )
-            del_btn.pack(side="right", padx=8, pady=4)
+            del_btn.pack(side="right", padx=(2, 8), pady=4)
+
+            down_btn = ctk.CTkButton(
+                row, 
+                text="▼", 
+                width=30, 
+                height=26, 
+                fg_color="#555555", 
+                hover_color="#777777", 
+                font=ctk.CTkFont(size=12, weight="bold"),
+                command=lambda i=idx-1: self.move_down(i)
+            )
+            down_btn.pack(side="right", padx=(2, 2), pady=4)
+
+            up_btn = ctk.CTkButton(
+                row, 
+                text="▲", 
+                width=30, 
+                height=26, 
+                fg_color="#555555", 
+                hover_color="#777777", 
+                font=ctk.CTkFont(size=12, weight="bold"),
+                command=lambda i=idx-1: self.move_up(i)
+            )
+            up_btn.pack(side="right", padx=(2, 2), pady=4)
+
+    def move_up(self, index):
+        if index > 0:
+            self.urls[index - 1], self.urls[index] = self.urls[index], self.urls[index - 1]
+            self.refresh_list()
+
+    def move_down(self, index):
+        if index < len(self.urls) - 1:
+            self.urls[index + 1], self.urls[index] = self.urls[index], self.urls[index + 1]
+            self.refresh_list()
 
     def build_arguments(self):
         args = []
